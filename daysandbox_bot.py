@@ -33,8 +33,8 @@ This bot does not ban anybody, it only deletes messages by the rules listed abov
 
 `/help` - display this help message
 `/stat` - display simple statistics about number of deleted messages
-`/linksremover_set publog=[yes|no]` - enable/disable messages to group about deleted posts
-`/linksremover_get publog` - get value of `publog` setting
+`/linksremover_set [publog|channels|groups|links|forwarded|emails]=[yes|no]` - enable/disable messages to group or manage messages that will be deleted
+`/linksremover_get [publog|channels|groups|links|forwarded|emails]` - get value of setting
 
 *How to log deleted messages to private channel*
 Add bot to the channel as admin. Write `/setlog` to the channel. Forward message to the group.
@@ -236,12 +236,12 @@ def create_bot(api_token, db):
             if val in ('yes', 'no'):
                 val_bool = (val == 'yes')
                 set_setting(db, group_config, msg.chat.id, key, val_bool)
-                bot.reply_to(msg, 'Set public_notification to %s for group %s' % (
-                    val_bool,
+                bot.reply_to(msg, 'Set %s to %s for group %s' % (
+                    key, val_bool,
                     '@%s' % msg.chat.username if msg.chat.username else '#%d' % msg.chat.id,
                 ))
             else:
-                bot.reply_to(msg, 'Invalid public_notification value. Should be: yes or no')
+                bot.reply_to(msg, 'Invalid value of %s. Should be: yes or no' % key)
 
     @bot.channel_post_handler(commands=['setlogformat'])
     def handle_setlogformat(msg):

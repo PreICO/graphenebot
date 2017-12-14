@@ -1,4 +1,4 @@
-## DaySandBox Bot Help
+## LinksRemover Bot Help
 
 This bot implements simple anti-spam technique - it deletes all posts which contains link or mentions @username or been forwarded from somewhere.
 
