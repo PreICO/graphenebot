@@ -13,19 +13,17 @@ import html
 
 from util import find_username_links, find_external_links, fetch_user_type
 
-HELP = """*DaySandBox Bot Help*
+HELP = """*LinksRemover Bot Help*
 
-This bot implements simple anti-spam technique - it deletes all posts which:
-1. contains link or @username or forwarded from somewhere
-2. AND posted by the user who has joined the group less than 24 hours ago
+This bot implements simple anti-spam technique - it deletes all posts which contains link or @username or forwarded from somewhere
 
 Bot processes only @username links related to group/channel, if @username link points to other user it is not filtered by bot.
 
-This bot does not ban anybody, it only deletes messages by the rules listed above. The idea is that in these 24 hours the spamer would be banned anyway for posting spam to other groups that are not protected by [@daysandbox_bot](https://t.me/daysandbox_bot).
+This bot does not ban anybody, it only deletes messages by the rules listed above. The idea is that in these 24 hours the spamer would be banned anyway for posting spam to other groups that are not protected by [@linksremover_bot](https://t.me/linksremover_bot).
 
 *Usage*
 
-1. Add [@daysandbox_bot](https://t.me/daysandbox_bot) to your group.
+1. Add [@linksremover_bot](https://t.me/linksremover_bot) to your group.
 2. Go to group settings / users list / promote user to admin
 3. Enable only one item: Delete messages
 4. Click SAVE button
@@ -35,10 +33,8 @@ This bot does not ban anybody, it only deletes messages by the rules listed abov
 
 `/help` - display this help message
 `/stat` - display simple statistics about number of deleted messages
-`/daysandbox_set publog=[yes|no]` - enable/disable messages to group about deleted posts
-`/daysandbox_set safe_hours=[int]` - number in hours, how long new users are restricted to post links and forward posts, default is 24 hours (1 day). Allowed value is number between 1 and 8760 (365 days).
-`/daysandbox_get publog` - get value of `publog` setting
-`/daysandbox_get safe_hours` - get value of `safe_hours` setting
+`/linksremover_set publog=[yes|no]` - enable/disable messages to group about deleted posts
+`/linksremover_get publog` - get value of `publog` setting
 
 *How to log deleted messages to private channel*
 Add bot to the channel as admin. Write `/setlog` to the channel. Forward message to the group.
@@ -52,22 +48,14 @@ text of message (or caption text of photo/video)
 - "json" - display full message data in JSON format
 - "forward" - simply forward message to the channel (just message, no data about chat or author).
 
-*Questions, Feedback*
-Support group: [@daysandbox_chat](https://t.me/daysandbox_chat)
-
 *Open Source*
 
-The source code is available at [github.com/lorien/daysandbox_bot](https://github.com/lorien/daysandbox_bot)
+The source code is available at [github.com/r4rdsn/linksremover_bot](https://github.com/r4rdsn/linksremover_bot)
 """
-SUPERUSER_IDS = set([
-    46284539, # @madspectator
-])
 # List of keys allowed to use in set_setting/get_setting
-GROUP_SETTING_KEYS = ('publog', 'log_channel_id', 'logformat', 'safe_hours')
-# Channel of global channel to translate ALL spam
-GLOBAL_CHANNEL_ID = -1001148916224 
+GROUP_SETTING_KEYS = ('publog', 'log_channel_id', 'logformat', 'channels', 'groups', 'links', 'forwarded', 'emails')
 # Default time to reject link and forwarded posts from new user
-DEFAULT_SAFE_HOURS = 24
+
 
 def dump_telegram_object(msg):
     ret = {}
@@ -93,13 +81,6 @@ def save_event(db, event_type, msg, **kwargs):
     })
     event.update(**kwargs)
     db.event.save(event)
-
-
-def load_joined_users(db):
-    ret = {}
-    for user in db.joined_user.find():
-        ret[(user['chat_id'], user['user_id'])] = user['date']
-    return ret
 
 
 def load_group_config(db):
@@ -160,25 +141,8 @@ def process_user_type(db, username):
 
 def create_bot(api_token, db):
     bot = telebot.TeleBot(api_token)
-    joined_users = load_joined_users(db)
     group_config = load_group_config(db)
     delete_events = {}
-
-    @bot.message_handler(content_types=['new_chat_members'])
-    def handle_new_chat_member(msg):
-        for user in msg.new_chat_members:
-            now = datetime.utcnow()
-            joined_users[(msg.chat.id, user.id)] = now
-            db.joined_user.find_one_and_update(
-                {
-                    'chat_id': msg.chat.id,
-                    'user_id': user.id,
-                    'chat_username': msg.chat.username,
-                    'user_username': user.username,
-                },
-                {'$set': {'date': now}},
-                upsert=True,
-            )
 
     @bot.message_handler(commands=['start', 'help'])
     def handle_start_help(msg):
@@ -186,8 +150,8 @@ def create_bot(api_token, db):
             bot.reply_to(msg, HELP, parse_mode='Markdown')
         else:
             if msg.text.strip() in (
-                    '/start', '/start@daysandbox_bot', '/start@daysandbox_test_bot',
-                    '/help', '/help@daysandbox_bot', '/help@daysandbox_test_bot'
+                    '/start', '/start@linksremover_bot',
+                    '/help', '/help@linksremover_bot'
                 ):
                 bot.delete_message(msg.chat.id, msg.message_id)
 
@@ -241,14 +205,14 @@ def create_bot(api_token, db):
         ret += '\n\nTop 10 week:\n%s' % '\n'.join('  %s (%d)' % x for x in top_week.most_common(10))
         bot.reply_to(msg, ret)
 
-    @bot.message_handler(commands=['daysandbox_set', 'daysandbox_get'])
+    @bot.message_handler(commands=['linksremover_set', 'linksremover_get'])
     def handle_set_get(msg):
         if not msg.chat.type in ('group', 'supergroup'):
             bot.reply_to(msg, 'This command have to be called from the group')
             return
-        re_cmd_set = re.compile(r'^/daysandbox_set (publog|safe_hours)=(.+)$')
-        re_cmd_get = re.compile(r'^/daysandbox_get (publog|safe_hours)()$')
-        if msg.text.startswith('/daysandbox_set'):
+        re_cmd_set = re.compile(r'^/linksremover_set (publog|channels|groups|links|forwarded|emails)=(.+)$')
+        re_cmd_get = re.compile(r'^/linksremover_get (publog|channels|groups|links|forwarded|emails)()$')
+        if msg.text.startswith('/linksremover_set'):
             match = re_cmd_set.match(msg.text)
             action = 'SET'
         else:
@@ -261,7 +225,7 @@ def create_bot(api_token, db):
         key, val = match.groups()
 
         admins = bot.get_chat_administrators(msg.chat.id)
-        admin_ids = set([x.user.id for x in admins]) | set(SUPERUSER_IDS)
+        admin_ids = set([x.user.id for x in admins])
         if msg.from_user.id not in admin_ids:
             bot.reply_to(msg, 'Access denied')
             return
@@ -269,30 +233,15 @@ def create_bot(api_token, db):
         if action == 'GET':
             bot.reply_to(msg, str(get_setting(group_config, msg.chat.id, key)))
         else:
-            if key == 'publog':
-                if val in ('yes', 'no'):
-                    val_bool = (val == 'yes')
-                    set_setting(db, group_config, msg.chat.id, key, val_bool)
-                    bot.reply_to(msg, 'Set public_notification to %s for group %s' % (
-                        val_bool,
-                        '@%s' % msg.chat.username if msg.chat.username else '#%d' % msg.chat.id,
-                    ))
-                else:
-                    bot.reply_to(msg, 'Invalid public_notification value. Should be: yes or no')
-            elif key == 'safe_hours':
-                if not val.isdigit():
-                    bot.reply_to(msg, 'Invalid safe_hours value. Should be a number')
-                val_int = int(val)
-                max_hours = 24 * 365
-                if val_int < 0 or val_int > max_hours:
-                    bot.reply_to(msg, 'Invalid safe_hours value. Should be a number between 1 and %d' % max_hours)
-                set_setting(db, group_config, msg.chat.id, key, val_int)
-                bot.reply_to(msg, 'Set safe_hours to %s for group %s' % (
-                    val_int,
+            if val in ('yes', 'no'):
+                val_bool = (val == 'yes')
+                set_setting(db, group_config, msg.chat.id, key, val_bool)
+                bot.reply_to(msg, 'Set public_notification to %s for group %s' % (
+                    val_bool,
                     '@%s' % msg.chat.username if msg.chat.username else '#%d' % msg.chat.id,
                 ))
             else:
-                bot.reply_to(msg, 'Unknown action: %s' % key)
+                bot.reply_to(msg, 'Invalid public_notification value. Should be: yes or no')
 
     @bot.channel_post_handler(commands=['setlogformat'])
     def handle_setlogformat(msg):
@@ -301,10 +250,10 @@ def create_bot(api_token, db):
         if not msg.chat.type == 'channel':
             bot.reply_to(msg, 'This command have to be called from the channel')
             return
-        #channel_admin_ids = [x.user.id for x in bot.get_chat_administrators(msg.chat.id)]
-        #if msg.from_user.id not in channel_admin_ids:
-        #    bot.reply_to(msg, 'Access denied')
-        #    return
+        channel_admin_ids = [x.user.id for x in bot.get_chat_administrators(msg.chat.id)]
+        if msg.from_user.id not in channel_admin_ids:
+            bot.reply_to(msg, 'Access denied')
+            return
         valid_formats = ('json', 'forward', 'simple')
         formats = msg.text.split(' ')[-1].split(',')
         if any(x not in valid_formats for x in formats):
@@ -330,7 +279,7 @@ def create_bot(api_token, db):
             return
 
         admins = bot.get_chat_administrators(msg.chat.id)
-        admin_ids = set([x.user.id for x in admins]) | set(SUPERUSER_IDS)
+        admin_ids = set([x.user.id for x in admins])
         if msg.from_user.id not in admin_ids:
             bot.reply_to(msg, 'Access denied')
             return
@@ -346,7 +295,7 @@ def create_bot(api_token, db):
             return
 
         admins = bot.get_chat_administrators(msg.chat.id)
-        admin_ids = set([x.user.id for x in admins]) | set(SUPERUSER_IDS)
+        admin_ids = set([x.user.id for x in admins])
         if msg.from_user.id not in admin_ids:
             bot.reply_to(msg, 'Access denied')
             return
@@ -371,36 +320,32 @@ def create_bot(api_token, db):
         content_types=['text', 'photo', 'video', 'audio', 'sticker', 'document']
     )
     def handle_any_msg(msg):
+        if msg.from_user.id in [x.user.id for x in bot.get_chat_administrators(msg.chat.id)]:
+            return
+
         to_delete = False
-        if msg.from_user.username == 'madspectator' and (msg.text == 'del' or msg.caption == 'del'):
-            reason = 'debug delete'
-            to_delete = True
-        if not to_delete:
-            try:
-                join_date = joined_users[(msg.chat.id, msg.from_user.id)]
-            except KeyError:
-                return
-            safe_hours = get_setting(group_config, msg.chat.id, 'safe_hours', DEFAULT_SAFE_HOURS)
-            if datetime.utcnow() - timedelta(hours=safe_hours) > join_date:
-                return
         for ent in (msg.entities or []):
-            if ent.type in ('url', 'text_link'):
+            if ent.type in ('url', 'text_link') and get_setting(group_config, msg.chat.id, 'links', True):
                 to_delete = True
                 reason = 'external link'
                 break
-            if ent.type in ('email',):
+            if ent.type in ('email',) and get_setting(group_config, msg.chat.id, 'emails', True):
                 to_delete = True
                 reason = 'email'
                 break
             if ent.type == 'mention':
                 username = msg.text[ent.offset:ent.offset + ent.length].lstrip('@')
                 user_type = process_user_type(db, username)
-                if user_type in ('group', 'channel'):
+                if user_type == 'group' and get_setting(group_config, msg.chat.id, 'groups', True):
+                    reason = '@-link to group'
                     to_delete = True
-                    reason = '@-link to group/channel'
+                    break
+                elif user_type == 'channel' and get_setting(group_config, msg.chat.id, 'channels', True):
+                    reason = '@-link to channel'
+                    to_delete = True
                     break
         if not to_delete:
-            if msg.forward_from or msg.forward_from_chat:
+            if (msg.forward_from or msg.forward_from_chat) and get_setting(group_config, msg.chat.id, 'forwarded', True):
                 reason = 'forwarded'
                 to_delete = True
         if not to_delete:
@@ -408,12 +353,16 @@ def create_bot(api_token, db):
             for username in usernames:
                 username = username.lstrip('@')
                 user_type = process_user_type(db, username)
-                if user_type in ('group', 'channel'):
-                    reason = 'caption @-link to group/channel'
+                if user_type == 'group' and get_setting(group_config, msg.chat.id, 'groups', True):
+                    reason = 'caption @-link to group'
+                    to_delete = True
+                    break
+                elif user_type == 'channel' and get_setting(group_config, msg.chat.id, 'channels', True):
+                    reason = 'caption @-link to channel'
                     to_delete = True
                     break
         if not to_delete:
-            if find_external_links(msg.caption or ''):
+            if find_external_links(msg.caption or '') and get_setting(group_config, msg.chat.id, 'links', True):
                 reason = 'caption external link'
                 to_delete = True
         if to_delete:
@@ -437,11 +386,11 @@ def create_bot(api_token, db):
                             event_key not in delete_events
                             or delete_events[event_key] < datetime.utcnow() - timedelta(hours=1)
                         ):
-                        ret = 'Removed msg from %s. Reason: new user + %s' % (from_user, reason)
+                        ret = 'Removed msg from %s. Reason: %s' % (from_user, reason)
                         bot.send_message(msg.chat.id, ret, parse_mode='HTML')
                 delete_events[event_key] = datetime.utcnow()
 
-                ids = set([GLOBAL_CHANNEL_ID])
+                ids = set()
                 channel_id = get_setting(group_config, msg.chat.id, 'log_channel_id')
                 if channel_id:
                     ids.add(channel_id)
@@ -505,7 +454,7 @@ def main():
         token = config['test_api_token']
     else:
         token = config['api_token']
-    db = MongoClient()['daysandbox']
+    db = MongoClient()['linksremover']
     db.user.create_index('username', unique=True)
     bot = create_bot(token, db)
     bot.polling()
