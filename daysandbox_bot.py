@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from pprint import pprint
 import re
+import sys
 from collections import Counter
 import jsondate
 import json
@@ -10,6 +11,7 @@ from argparse import ArgumentParser
 from pymongo import MongoClient
 from datetime import datetime, timedelta
 import html
+from requests.exceptions import ReadTimeout
 
 from util import find_username_links, find_external_links, fetch_user_type
 
@@ -33,8 +35,8 @@ This bot does not ban anybody, it only deletes messages by the rules listed abov
 
 `/help` - display this help message
 `/stat` - display simple statistics about number of deleted messages
-`/linksremover_set [publog|channels|groups|links|forwarded|emails]=[yes|no]` - enable/disable messages to group or manage messages that will be deleted
-`/linksremover_get [publog|channels|groups|links|forwarded|emails]` - get value of setting
+`/linksremover_set [publog|channels|groups|links|forwarded|emails|kick]=[yes|no]` - enable/disable messages to group or manage messages that will be deleted
+`/linksremover_get [publog|channels|groups|links|forwarded|emails|kick]` - get value of setting
 
 *How to log deleted messages to private channel*
 Add bot to the channel as admin. Write `/setlog` to the channel. Forward message to the group.
@@ -53,7 +55,7 @@ text of message (or caption text of photo/video)
 The source code is available at [github.com/r4rdsn/linksremover_bot](https://github.com/r4rdsn/linksremover_bot)
 """
 # List of keys allowed to use in set_setting/get_setting
-GROUP_SETTING_KEYS = ('publog', 'log_channel_id', 'logformat', 'channels', 'groups', 'links', 'forwarded', 'emails')
+GROUP_SETTING_KEYS = ('publog', 'log_channel_id', 'logformat', 'channels', 'groups', 'links', 'forwarded', 'emails', 'kick')
 # Default time to reject link and forwarded posts from new user
 
 
@@ -144,6 +146,15 @@ def create_bot(api_token, db):
     group_config = load_group_config(db)
     delete_events = {}
 
+    @bot.message_handler(content_types=['new_chat_members'])
+    def handle_new_chat_member(msg):
+        if msg.from_user.id not in [x.user.id for x in bot.get_chat_administrators(msg.chat.id)]:
+            return
+
+        for user in msg.new_chat_members:
+            if user.is_bot and user.username != 'linksremover_bot':
+                bot.kick_chat_member(chat_id=msg.chat.id, user_id=user.id)
+
     @bot.message_handler(commands=['start', 'help'])
     def handle_start_help(msg):
         if msg.chat.type == 'private':
@@ -210,8 +221,8 @@ def create_bot(api_token, db):
         if not msg.chat.type in ('group', 'supergroup'):
             bot.reply_to(msg, 'This command have to be called from the group')
             return
-        re_cmd_set = re.compile(r'^/linksremover_set (publog|channels|groups|links|forwarded|emails)=(.+)$')
-        re_cmd_get = re.compile(r'^/linksremover_get (publog|channels|groups|links|forwarded|emails)()$')
+        re_cmd_set = re.compile(r'^/linksremover_set (publog|channels|groups|links|forwarded|emails|kick)=(.+)$')
+        re_cmd_get = re.compile(r'^/linksremover_get (publog|channels|groups|links|forwarded|emails|kick)()$')
         if msg.text.startswith('/linksremover_set'):
             match = re_cmd_set.match(msg.text)
             action = 'SET'
@@ -457,7 +468,7 @@ def main():
     db = MongoClient()['linksremover']
     db.user.create_index('username', unique=True)
     bot = create_bot(token, db)
-    bot.polling()
+    bot.polling(none_stop=True)
 
 
 if __name__ == '__main__':
