@@ -142,13 +142,13 @@ def process_user_type(db, username):
 
 
 def create_bot(api_token, db):
-    bot = telebot.TeleBot(api_token)
+    bot = telebot.TeleBot(api_token, threaded=False)
     group_config = load_group_config(db)
     delete_events = {}
 
     @bot.message_handler(content_types=['new_chat_members'])
     def handle_new_chat_member(msg):
-        if msg.from_user.id not in [x.user.id for x in bot.get_chat_administrators(msg.chat.id)]:
+        if msg.from_user.id in [x.user.id for x in bot.get_chat_administrators(msg.chat.id)]:
             return
 
         for user in msg.new_chat_members:
@@ -331,9 +331,6 @@ def create_bot(api_token, db):
         content_types=['text', 'photo', 'video', 'audio', 'sticker', 'document']
     )
     def handle_any_msg(msg):
-        if msg.from_user.id in [x.user.id for x in bot.get_chat_administrators(msg.chat.id)]:
-            return
-
         to_delete = False
         for ent in (msg.entities or []):
             if ent.type in ('url', 'text_link') and get_setting(group_config, msg.chat.id, 'links', True):
@@ -377,6 +374,9 @@ def create_bot(api_token, db):
                 reason = 'caption external link'
                 to_delete = True
         if to_delete:
+            if msg.from_user.id in [x.user.id for x in bot.get_chat_administrators(msg.chat.id)]:
+                return
+
             try:
                 save_event(db, 'delete_msg', msg, reason=reason)
                 if msg.from_user.first_name and msg.from_user.last_name:
@@ -454,6 +454,16 @@ def create_bot(api_token, db):
     return bot
 
 
+def poll(bot):
+    while True:
+        try:
+            bot.polling()
+        except KeyboardInterrupt:
+            break
+        except:
+            poll(bot)
+
+
 def main():
     parser = ArgumentParser()
     parser.add_argument('--mode')
@@ -468,8 +478,7 @@ def main():
     db = MongoClient()['linksremover']
     db.user.create_index('username', unique=True)
     bot = create_bot(token, db)
-    bot.polling(none_stop=True)
-
+    poll(bot)
 
 if __name__ == '__main__':
     main()
