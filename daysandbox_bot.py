@@ -365,10 +365,11 @@ def create_bot(api_token, db):
                     to_delete = True
                     break
         if not to_delete:
-            mention = re.search(r'\b@\s([a-zA-Z]+)\b', msg.text)
+            mention = re.search(r'(?:^|\W)\@\s([a-zA-Z]+)(?:$|\W)', msg.text)
             if mention:
-                username = process_user_type(db, mention.group(1))
+                username = mention.group(1)
                 if username.lower() not in USERNAME_EXCEPTIONS:
+                    user_type = process_user_type(db, username)
                     if user_type == 'group' and get_setting(group_config, msg.chat.id, 'groups', True):
                         reason = '@-link to group'
                         to_delete = True
