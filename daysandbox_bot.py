@@ -57,7 +57,7 @@ text of message (or caption text of photo/video)
 
 *Open Source*
 
-The source code is available at [github.com/r4rdsn/linksremover_bot](https://github.com/r4rdsn/linksremover_bot)
+The source code is available at [github.com/PreICO/linksremover_bot](https://github.com/PreICO/linksremover_bot)
 """
 # List of keys allowed to use in set_setting/get_setting
 GROUP_SETTING_KEYS = ('publog', 'log_channel_id', 'logformat', 'channels', 'groups', 'links', 'forwarded', 'emails', 'kick')
