@@ -12,8 +12,13 @@ from pymongo import MongoClient
 from datetime import datetime, timedelta
 import html
 from requests.exceptions import ReadTimeout
+from urllib.parse import urlparse
 
 from util import find_username_links, find_external_links, fetch_user_type
+
+LINKS_EXCEPTIONS = ('steemit.com', 'golos.io', 'golos.blog')
+USERNAME_EXCEPTIONS = ('blockchainschool', 'preico')
+
 
 HELP = """*LinksRemover Bot Help*
 
@@ -334,6 +339,11 @@ def create_bot(api_token, db):
         to_delete = False
         for ent in (msg.entities or []):
             if ent.type in ('url', 'text_link') and get_setting(group_config, msg.chat.id, 'links', True):
+                url = msg.text[ent.offset:ent.offset + ent.length]
+                if not url.startswith('//') and not url.startswith('http'):
+                    url = '//' + url
+                if urlparse(url).netloc.lower() in LINKS_EXCEPTIONS:
+                    continue
                 to_delete = True
                 reason = 'external link'
                 break
@@ -343,6 +353,8 @@ def create_bot(api_token, db):
                 break
             if ent.type == 'mention':
                 username = msg.text[ent.offset:ent.offset + ent.length].lstrip('@')
+                if username.lower() in USERNAME_EXCEPTIONS:
+                    continue
                 user_type = process_user_type(db, username)
                 if user_type == 'group' and get_setting(group_config, msg.chat.id, 'groups', True):
                     reason = '@-link to group'
@@ -353,6 +365,16 @@ def create_bot(api_token, db):
                     to_delete = True
                     break
         if not to_delete:
+            mention = re.search(r'\b@\s([a-zA-Z]+)\b', msg.text)
+            if mention:
+                username = process_user_type(db, mention.group(1))
+                if username.lower() not in USERNAME_EXCEPTIONS:
+                    if user_type == 'group' and get_setting(group_config, msg.chat.id, 'groups', True):
+                        reason = '@-link to group'
+                        to_delete = True
+                    if user_type == 'channel' and get_setting(group_config, msg.chat.id, 'channels', True):
+                        reason = '@-link to channel'
+                        to_delete = True
             if (msg.forward_from or msg.forward_from_chat) and get_setting(group_config, msg.chat.id, 'forwarded', True):
                 reason = 'forwarded'
                 to_delete = True
@@ -397,7 +419,7 @@ def create_bot(api_token, db):
                             event_key not in delete_events
                             or delete_events[event_key] < datetime.utcnow() - timedelta(hours=1)
                         ):
-                        ret = 'Removed msg from %s. Reason: %s' % (from_user, reason)
+                        ret = 'Removed msg from %s. Reason: %s\nMessages containing links to these websites will not be deleted: %s' % (from_user, reason, ', '.join(LINKS_EXCEPTIONS))
                         bot.send_message(msg.chat.id, ret, parse_mode='HTML')
                 delete_events[event_key] = datetime.utcnow()
 
