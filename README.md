@@ -18,4 +18,6 @@ To get more help submit `/help` command to the bot.
 
 ## Fork
 Master repository is [github.com/lorien/daysandbox_bot](https://github.com/lorien/daysandbox_bot).
-Fork is initiated to make the bot remove any links FOREVER. Except links to steemit.com and golos.io blogs and any graphene projects from whitelist. Modificate whitelist file for adding your lovly graphene project. Thx
+Fork is initiated to make the bot remove any links FOREVER. Except links to steemit.com and golos.io blogs in returned message and any graphene projects from whitelist in stealth mode. Modificate whitelist file for adding your lovly graphene project. Any questions in https://t.me/graphenix
+
+Powered for Graphene Foundation
