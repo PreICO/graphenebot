@@ -1,4 +1,4 @@
-## LinksRemover Bot Help
+## Graphene Bot Help
 
 This bot implements simple anti-spam technique - it deletes all posts which contains link or mentions @username or been forwarded from somewhere.
 
@@ -7,7 +7,7 @@ This bot does not ban anybody, it only deletes messages by the rules listed abov
 
 ## Usage
 
-1. Add [@linksremover_bot](https://t.me/linksremover_bot) to your group.
+1. Add [@graphenebot](https://t.me/graphenebot) to your group.
 2. Go to group settings / users list / promote user to admin
 3. Enable only one item: Delete messages
 4. Click SAVE button
