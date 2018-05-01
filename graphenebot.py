@@ -2,6 +2,7 @@
 from pprint import pprint
 import re
 import sys
+import os.path
 from collections import Counter
 import jsondate
 import json
@@ -16,21 +17,27 @@ from urllib.parse import urlparse
 
 from util import find_username_links, find_external_links, fetch_user_type
 
-LINKS_EXCEPTIONS = ('steemit.com', 'golos.io', 'golos.blog')
-USERNAME_EXCEPTIONS = ('blockchainschool', 'preico')
+
+USERNAME_EXCEPTIONS = ['blockchainschool', 'preico']
+EXCEPTION_FILES = ['nongraphenelist', 'whitelist']
+
+LINKS_EXCEPTIONS = []
+for filename in EXCEPTION_FILES:
+    with open(os.path.join(os.path.dirname(os.path.realpath(__file__)), filename)) as f:
+        LINKS_EXCEPTIONS.extend(f.read().splitlines())
 
 
-HELP = """*LinksRemover Bot Help*
+HELP = """*Graphene Bot Bot Help*
 
 This bot implements simple anti-spam technique - it deletes all posts which contains link or @username or forwarded from somewhere
 
 Bot processes only @username links related to group/channel, if @username link points to other user it is not filtered by bot.
 
-This bot does not ban anybody, it only deletes messages by the rules listed above. The idea is that in these 24 hours the spamer would be banned anyway for posting spam to other groups that are not protected by [@linksremover_bot](https://t.me/linksremover_bot).
+This bot does not ban anybody, it only deletes messages by the rules listed above. The idea is that in these 24 hours the spamer would be banned anyway for posting spam to other groups that are not protected by [@graphenebot](https://t.me/graphenebot).
 
 *Usage*
 
-1. Add [@linksremover_bot](https://t.me/linksremover_bot) to your group.
+1. Add [@graphenebot](https://t.me/graphenebot) to your group.
 2. Go to group settings / users list / promote user to admin
 3. Enable only one item: Delete messages
 4. Click SAVE button
@@ -40,8 +47,8 @@ This bot does not ban anybody, it only deletes messages by the rules listed abov
 
 `/help` - display this help message
 `/stat` - display simple statistics about number of deleted messages
-`/linksremover_set [publog|channels|groups|links|forwarded|emails|kick]=[yes|no]` - enable/disable messages to group or manage messages that will be deleted
-`/linksremover_get [publog|channels|groups|links|forwarded|emails|kick]` - get value of setting
+`/graphene_set [publog|channels|groups|links|forwarded|emails|kick]=[yes|no]` - enable/disable messages to group or manage messages that will be deleted
+`/graphene_get [publog|channels|groups|links|forwarded|emails|kick]` - get value of setting
 
 *How to log deleted messages to private channel*
 Add bot to the channel as admin. Write `/setlog` to the channel. Forward message to the group.
@@ -57,7 +64,7 @@ text of message (or caption text of photo/video)
 
 *Open Source*
 
-The source code is available at [github.com/PreICO/linksremover_bot](https://github.com/PreICO/linksremover_bot)
+The source code is available at [github.com/PreICO/graphenebot](https://github.com/PreICO/graphenebot)
 """
 # List of keys allowed to use in set_setting/get_setting
 GROUP_SETTING_KEYS = ('publog', 'log_channel_id', 'logformat', 'channels', 'groups', 'links', 'forwarded', 'emails', 'kick')
@@ -157,7 +164,7 @@ def create_bot(api_token, db):
             return
 
         for user in msg.new_chat_members:
-            if user.is_bot and user.username != 'linksremover_bot':
+            if user.is_bot and user.username != 'graphenebot':
                 bot.kick_chat_member(chat_id=msg.chat.id, user_id=user.id)
 
     @bot.message_handler(commands=['start', 'help'])
@@ -166,8 +173,8 @@ def create_bot(api_token, db):
             bot.reply_to(msg, HELP, parse_mode='Markdown')
         else:
             if msg.text.strip() in (
-                    '/start', '/start@linksremover_bot',
-                    '/help', '/help@linksremover_bot'
+                    '/start', '/start@graphenebot',
+                    '/help', '/help@graphenebot'
                 ):
                 bot.delete_message(msg.chat.id, msg.message_id)
 
@@ -221,14 +228,14 @@ def create_bot(api_token, db):
         ret += '\n\nTop 10 week:\n%s' % '\n'.join('  %s (%d)' % x for x in top_week.most_common(10))
         bot.reply_to(msg, ret)
 
-    @bot.message_handler(commands=['linksremover_set', 'linksremover_get'])
+    @bot.message_handler(commands=['graphene_set', 'graphene_get'])
     def handle_set_get(msg):
         if not msg.chat.type in ('group', 'supergroup'):
             bot.reply_to(msg, 'This command have to be called from the group')
             return
-        re_cmd_set = re.compile(r'^/linksremover_set (publog|channels|groups|links|forwarded|emails|kick)=(.+)$')
-        re_cmd_get = re.compile(r'^/linksremover_get (publog|channels|groups|links|forwarded|emails|kick)()$')
-        if msg.text.startswith('/linksremover_set'):
+        re_cmd_set = re.compile(r'^/graphene_set (publog|channels|groups|links|forwarded|emails|kick)=(.+)$')
+        re_cmd_get = re.compile(r'^/graphene_get (publog|channels|groups|links|forwarded|emails|kick)()$')
+        if msg.text.startswith('/graphene_set'):
             match = re_cmd_set.match(msg.text)
             action = 'SET'
         else:
@@ -420,7 +427,7 @@ def create_bot(api_token, db):
                             event_key not in delete_events
                             or delete_events[event_key] < datetime.utcnow() - timedelta(hours=1)
                         ):
-                        ret = 'Removed msg from %s. Reason: %s\nMessages containing links to these websites will not be deleted: %s' % (from_user, reason, ', '.join(LINKS_EXCEPTIONS))
+                        ret = 'Removed msg from %s. Reason: %s\nMessages containing links to these websites will not be deleted: steemit.com, golos.io'
                         bot.send_message(msg.chat.id, ret, parse_mode='HTML')
                 delete_events[event_key] = datetime.utcnow()
 
@@ -498,7 +505,7 @@ def main():
         token = config['test_api_token']
     else:
         token = config['api_token']
-    db = MongoClient()['linksremover']
+    db = MongoClient()['graphene']
     db.user.create_index('username', unique=True)
     bot = create_bot(token, db)
     poll(bot)
