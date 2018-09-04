@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 from util import find_username_links, find_external_links, fetch_user_type
 
 
-USERNAME_EXCEPTIONS = ['blockchainschool', 'preico']
+USERNAME_EXCEPTIONS = ['blockchainschool', 'preico', 'tnam0rken_chanel']
 EXCEPTION_FILES = ['nongraphenelist', 'whitelist']
 
 LINKS_EXCEPTIONS = []
@@ -427,7 +427,7 @@ def create_bot(api_token, db):
                             event_key not in delete_events
                             or delete_events[event_key] < datetime.utcnow() - timedelta(hours=1)
                         ):
-                        ret = 'Removed msg from %s. Reason: %s\nMessages containing links to these websites will not be deleted: steemit.com, golos.io'
+                        ret = 'Removed msg from %s. Reason: %s\nMessages containing links to these websites will not be deleted: steemit.com, golos.io and whaleshares.io'
                         bot.send_message(msg.chat.id, ret, parse_mode='HTML')
                 delete_events[event_key] = datetime.utcnow()
 
