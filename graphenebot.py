@@ -27,7 +27,7 @@ for filename in EXCEPTION_FILES:
         LINKS_EXCEPTIONS.extend(f.read().splitlines())
 
 
-HELP = """*Graphene Bot Bot Help*
+HELP = """*Graphene Bot Help*
 
 This bot implements simple anti-spam technique - it deletes all posts which contains link or @username or forwarded from somewhere
 
